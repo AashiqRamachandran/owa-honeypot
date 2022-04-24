@@ -1,3 +1,4 @@
+import datetime
 import os
 import json
 import logging
@@ -16,8 +17,13 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 
-def create_app(test_config=None):
+def save_data(json_):
+    with open("log.jsonl", "a") as stream:
+        stream.write(json.dumps(json_))
+        stream.write("\n")
 
+
+def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
     @app.errorhandler(404)
@@ -25,18 +31,15 @@ def create_app(test_config=None):
         # note that we set the 404 status explicitly
         return render_template('404.html'), 404
 
-
     @app.errorhandler(403)
     def page_no_access(e):
         # note that we set the 404 status explicitly
         return render_template('403.html'), 403
 
-
     @app.errorhandler(401)
     def page_auth_required(e):
         # note that we set the 404 status explicitly
         return render_template('401.html'), 401
-    
 
     app.register_error_handler(404, page_not_found)
     app.register_error_handler(403, page_no_access)
@@ -51,7 +54,6 @@ def create_app(test_config=None):
     except OSError:
         pass
 
-
     def check_auth(username, password):
         logger.info(f"{request.base_url}|{username}:{password}")
         return False
@@ -59,9 +61,9 @@ def create_app(test_config=None):
     def authenticate():
         """Sends a 401 response that enables basic auth"""
         return Response(
-        'Could not verify your access level for that URL.\n'
-        'You have to login with proper credentials', 401,
-        {'WWW-Authenticate': 'Basic realm="Login Required"'})
+            'Could not verify your access level for that URL.\n'
+            'You have to login with proper credentials', 401,
+            {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
     def requires_auth(f):
         @wraps(f)
@@ -70,11 +72,12 @@ def create_app(test_config=None):
             if not auth or not check_auth(auth.username, auth.password):
                 return authenticate()
             return f(*args, **kwargs)
+
         return decorated
-	
 
     def add_response_headers(headers={}):
         """This decorator adds the headers passed in to the response"""
+
         def decorator(f):
             @wraps(f)
             def decorated_function(*args, **kwargs):
@@ -83,14 +86,14 @@ def create_app(test_config=None):
                 for header, value in headers.items():
                     h[header] = value
                 return resp
+
             return decorated_function
+
         return decorator
 
-
     def changeheader(f):
-        return add_response_headers({"Server": "Microsoft-IIS/7.5", 
-            "X-Powered-By": "ASP.NET"})(f)
-
+        return add_response_headers({"Server": "Microsoft-IIS/7.5",
+                                     "X-Powered-By": "ASP.NET"})(f)
 
     @app.route('/Abs/')
     @app.route('/aspnet_client/')
@@ -121,14 +124,29 @@ def create_app(test_config=None):
     @changeheader
     @requires_auth
     def stub_redirect():
-        return redirect('/')
+        ua = request.headers.get('User-Agent')
+        ip = request.remote_addr
+        method = request.method
+        url = request.base_url
+        headers = request.headers
 
+        json_ = {
+            "scanner_ip": ip,
+            "scanner_method": method,
+            "user_agent": ua,
+            "endpoint": url,
+            "raw_headers": str(headers),
+            "scan_time": str(datetime.datetime.now())
+        }
+        print(json_)
+        save_data(json_)
+        return redirect('/')
 
     @app.route('/owa/auth/15.1.1466/themes/resources/segoeui-regular.ttf', methods=['GET'])
     @changeheader
     def font_segoeui_regular_ttf():
         return send_from_directory(app.static_folder, filename='segoeui-regular.ttf', conditional=True)
-        
+
     @app.route('/owa/auth/15.1.1466/themes/resources/segoeui-semilight.ttf', methods=['GET'])
     @changeheader
     def font_segoeui_semilight_ttf():
@@ -144,25 +162,64 @@ def create_app(test_config=None):
     def auth():
         ua = request.headers.get('User-Agent')
         ip = request.remote_addr
+        method = request.method
+        url = request.base_url
+        headers = request.headers
+        passwordText = ""
+        password = ""
+        username = ""
+
+        json_ = {
+            "scanner_ip": ip,
+            "scanner_method": method,
+            "user_agent": ua,
+            "endpoint": url,
+            "raw_headers": str(headers),
+            "scan_time": str(datetime.datetime.now())
+        }
+        save_data(json_)
+        print(json_)
         if request.method == 'GET':
             return redirect('/owa/auth/logon.aspx?replaceCurrent=1&reason=3&url=', 302)
         else:
-            passwordText = ""
-            password = ""
-            username = ""
+
             if "username" in request.form:
                 username = request.form["username"]
             if "password" in request.form:
                 password = request.form["password"]
             if "passwordText" in request.form:
                 passwordText = request.form["passwordText"]
+
+            json_.update({
+                "username": username,
+                "password": password,
+                "password_text": passwordText,
+                "scan_time": str(datetime.datetime.now())
+            })
+
             logger.info(f"{request.base_url}|{username}:{password}|{ip}|{ua}")
             return redirect('/owa/auth/logon.aspx?replaceCurrent=1&reason=2&url=', 302)
 
     @app.route('/owa/auth/logon.aspx', methods=['GET'])
     @changeheader
     def owa():
-        return render_template("outlook_web.html")  
+        ua = request.headers.get('User-Agent')
+        ip = request.remote_addr
+        method = request.method
+        url = request.base_url
+        headers = request.headers
+
+        json_ = {
+            "scanner_ip": ip,
+            "scanner_method": method,
+            "user_agent": ua,
+            "endpoint": url,
+            "raw_headers": str(headers),
+            "scan_time": str(datetime.datetime.now())
+        }
+        print(json_)
+        save_data(json_)
+        return render_template("outlook_web.html")
 
     @app.route('/')
     @app.route('/exchange/')
@@ -171,10 +228,27 @@ def create_app(test_config=None):
     @app.route('/webmail')
     @changeheader
     def index():
-        return redirect('/owa/auth/logon.aspx?replaceCurrent=1&url=', 302)          
+        ua = request.headers.get('User-Agent')
+        ip = request.remote_addr
+        method = request.method
+        url = request.base_url
+        headers = request.headers
+
+        json_ = {
+            "scanner_ip": ip,
+            "scanner_method": method,
+            "user_agent": ua,
+            "endpoint": url,
+            "raw_headers": str(headers),
+            "scan_time": str(datetime.datetime.now())
+        }
+        print(json_)
+        save_data(json_)
+        return redirect('/owa/auth/logon.aspx?replaceCurrent=1&url=', 302)
 
     return app
 
+
 if __name__ == "__main__":
     if __name__ == '__main__':
-        create_app().run(debug=False,port=80, host="0.0.0.0")
+        create_app().run(debug=False, port=80, host="0.0.0.0")
