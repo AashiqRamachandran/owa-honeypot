@@ -1,0 +1,13 @@
+[
+  {
+    "json": {
+      "field": "message",
+      "add_to_root": true
+    }
+  },
+  {
+    "geoip": {
+      "field": "scanner_ip"
+    }
+  }
+]
