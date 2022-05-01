@@ -1,0 +1,13 @@
+[
+  {
+    "split": {
+      "field": "message",
+      "separator": "~"
+    }
+  },
+  {
+    "script": {
+      "source": "ctx['scan_date'] = ctx['message'][0] ;\nctx['honeypot_details'] = ctx['message'][1] ;\nctx['scan_method'] = ctx['message'][3] ;\nctx['scan_endpoint'] = ctx['message'][4] ;\nctx['scanner_ip'] = ctx['message'][5] ;\n"
+    }
+  }
+]
